@@ -171,6 +171,3 @@ print(os.getcwd())
 print(os.path.exists('background_1.png'))
 ```
 
-## 📞 도움말
-
-문제가 있으면 코드의 주석을 참고하거나 질문해주세요!
