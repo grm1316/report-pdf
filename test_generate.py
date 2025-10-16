@@ -3,6 +3,7 @@ PDF 생성 테스트 스크립트
 """
 
 from security_report_pdf import SecurityReportPDF, ReportData
+import os
 
 
 def main():
@@ -15,15 +16,14 @@ def main():
     report_data = ReportData(
         company_name="[테스트 회사]",
         pc_name="[TEST-PC-001]",
-        date="2025년 10월 11일"
+        date="2025년 10월 13일"
     )
     
     # PDF 생성기 초기화
-    # 한글 폰트 경로를 지정하려면: SecurityReportPDF(font_path='path/to/font.ttf')
     generator = SecurityReportPDF()
     
-    # PDF 생성
-    output_file = "test_security_report.pdf"
+    # PDF 생성 (현재 폴더에 저장)
+    output_file = os.path.join(os.path.dirname(__file__), "test_security_report.pdf")
     generator.generate_report(output_file, report_data)
     
     print()

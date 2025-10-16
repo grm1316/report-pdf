@@ -4,3 +4,26 @@
 보고서 뒷배경3.png
 test.pdf
 test_security_report.pdf
+test-png-Images/test_1.png
+test-png-Images/test_2.png
+test-png-Images/test_3.png
+test-png-Images/test_4.png
+test-png-Images/test_5.png
+test-png-Images/test_6.png
+test-png-Images/test_7.png
+test-png-Images/test_8.png
+__pycache__/security_report_pdf.cpython-314.pyc
+final_dynamic_report.pdf
+test_security_report.pdf
+test_security_report.pdf
+__pycache__/security_report_pdf.cpython-313.pyc
+__pycache__/pdf_components.cpython-314.pyc
+__pycache__/report_data.cpython-314.pyc
+__pycache__/report_response_f.cpython-314.pyc
+__pycache__/report_response.cpython-313.pyc
+__pycache__/security_report_pdf_dynamic.cpython-313.pyc
+__pycache__/security_report_pdf_dynamic.cpython-314.pyc
+__pycache__/security_report_pdf_v2.cpython-314.pyc
+.gitignore
+
+test_security_report.pdf

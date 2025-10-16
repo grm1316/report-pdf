@@ -1,173 +1,100 @@
-# 보안 진단 보고서 PDF 생성기
+# 보안 진단 보고서 PDF 생성기 (security_report_pdf_dynamic.py 사용 안내)
 
-test.pdf와 동일한 형식의 보안 진단 보고서를 자동으로 생성합니다.
+security_report_pdf_dynamic.py 를 사용해 test.pdf 형태의 보고서를 생성하는 방법과 입력 형식을 정리합니다.
+이 파일은 기존 security_report_pdf.py의 디자인 규칙(폰트·간격·표 처리)을 반영하고, 마크다운 파싱·표 페이징·목차 2패스 렌더링을 지원합니다.
 
-## 📋 현재 구현 상태
-
-✅ **완료된 부분:**
-- 1페이지: 표지 (회사명, 제목, PC명, 날짜)
-- 2페이지: 목차
-- 3페이지: 개요 (분석 목적, 데이터 수집, PC 정보 테이블, 분석 일정)
-
-⏳ **다음 단계:**
-- 4-8페이지: 나머지 본문 내용 추가
-- 배경 이미지 적용
-- 워터마크 적용
-- Gemini API 연동
-
-## 🚀 빠른 시작
-
-### 1. 라이브러리 설치
-
+## 빠른 실행 (권장)
+1. 터미널 열기 (VS Code 통합 터미널)
+2. 작업 디렉터리 이동
 ```bash
-pip install -r requirements.txt
+cd /d g:\pdf
 ```
-
-### 2. PDF 생성 테스트
-
+3. 의존성 설치
 ```bash
-python test_generate.py
+pip install reportlab markdown
+```
+4. 테스트 스크립트(예: test_dynamic.py) 실행
+```bash
+python test_dynamic.py
+```
+- test_dynamic.py 예제는 security_report_pdf_dynamic.py 의 generate_from_json() 를 호출해 PDF를 생성합니다.
+- 생성되는 PDF 파일명을 터미널 출력에서 확인하세요.
+
+## 입력 JSON 형식 (generate_from_json에 전달)
+security_report_pdf_dynamic.py 의 generate_from_json(json_data, output_path, section_titles, section_mapping, main_sections)
+에 넘길 json_data 예시:
+
+```json
+{
+  "report": {
+    "id": "a1b2c3",
+    "title": "정보 유출 진단 보고서",
+    "summary": "[의뢰 회사 이름]",
+    "pc_id": "WORK-PC-001",
+    "created_at": "2025년 9월 18일"
+  },
+  "details": [
+    {"id":"d01","section_type":0,"order_no":1,"content":"분석 목적 내용..."},
+    {"id":"d02","section_type":1,"order_no":2,"content":"데이터 수집 내용 (마크다운, 표 포함)"},
+    {"id":"d06","section_type":5,"order_no":6,"content":"분석 요약 및 상세..."}
+  ]
+}
 ```
 
-실행하면 `test_security_report.pdf` 파일이 생성됩니다.
+- section_type: 세부 항목의 타입(숫자 키) — section_titles 맵의 키로 사용됩니다.
+- order_no: 문서 내 순서 정렬용.
+- content: 마크다운 형식(표, 코드블록, 굵게 등) 사용 가능.
 
-## 📁 파일 구조
-
-```
-C:\Test\pdf\
-├── requirements.txt              # 필요한 라이브러리
-├── security_report_pdf.py        # 메인 PDF 생성기
-├── test_generate.py              # 테스트 실행 스크립트
-├── README.md                     # 이 파일
-├── background_1.png (옵션)       # 표지 배경 이미지
-├── background_2.png (옵션)       # 목차 배경 이미지
-└── background_3.png (옵션)       # 본문 배경 이미지
-```
-
-## 🎨 커스터마이징
-
-### 한글 폰트 변경
-
-기본적으로 Windows의 맑은고딕을 사용합니다. 다른 폰트를 사용하려면:
+## section_titles / section_mapping / main_sections 예시
+generate_from_json 호출 시 아래와 같은 매핑을 전달하세요:
 
 ```python
-from security_report_pdf import SecurityReportPDF, ReportData
+section_titles = {
+    0: "분석 목적",
+    1: "데이터 수집",
+    2: "분석 일정",
+    3: "분석 방법",
+    4: "분석의 한계",
+    5: "분석 요약",
+    6: "취득 행위",
+    7: "유출 행위",
+    8: "증거 인멸 행위",
+    9: "확인된 사실",
+    10: "종합 의견 및 재구성"
+}
 
-# 나눔고딕 사용 예시
-generator = SecurityReportPDF(font_path='C:/Windows/Fonts/NanumGothic.ttf')
+# section_type -> main section 매핑 (예: 0~4 -> 1, 5~8 -> 2, 9~10 -> 3)
+section_mapping = {i: (1 if i<=4 else 2 if i<=8 else 3) for i in range(0, 11)}
+
+# 대분류 제목
+main_sections = {
+    1: "개요",
+    2: "분석 요약 및 상세",
+    3: "분석 결과"
+}
 ```
 
-### 데이터 변경
+## test_dynamic.py 예제 (간단)
+프로젝트 루트에 다음과 같은 테스트 스크립트를 만들면 바로 확인 가능합니다:
 
 ```python
-from security_report_pdf import ReportData
+# filepath: g:\pdf\test_dynamic.py
+from security_report_pdf_dynamic import SecurityReportPDF
+import json
 
-# 커스텀 데이터 생성
-custom_data = ReportData(
-    company_name="[우리 회사]",
-    pc_name="[DEV-PC-123]",
-    date="2025년 10월 15일",
-    pc_info={
-        "PC 이름": "DEV-PC-123",
-        "OS": "WINDOWS 11 Pro",
-        "MAC Address": "AA:BB:CC:DD:EE:FF",
-        "IP Address": "192.168.0.100"
-    }
-)
+with open("sample_input.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
 
-# PDF 생성
-generator = SecurityReportPDF()
-generator.generate_report("custom_report.pdf", custom_data)
+pdf = SecurityReportPDF()
+pdf.generate_from_json(data, "output_dynamic.pdf", section_titles, section_mapping, main_sections)
+print("output_dynamic.pdf 생성 완료")
 ```
 
-### 배경 이미지 추가
+## 주의사항 / 디버깅
+- 한글 폰트: Windows에서 맑은고딕(malgun.ttf) 사용. 폰트가 없으면 Helvetica 대체.
+- 배경 이미지: repository 루트의 001.png / 002.png 사용 (없으면 건너뜀).
+- 목차 동기화: 코드가 두 패스로 동작하므로 generate_from_json을 호출하면 목차가 표지 다음(2페이지)에 정확히 들어갑니다.
+- 만약 PDF가 중간에 멈추거나 SyntaxError가 발생하면 security_report_pdf_dynamic.py 파일이 중간에 잘려있지 않은지(끝까지 저장되었는지) 확인하세요.
 
-1. `보고서 뒷배경1.png`, `보고서 뒷배경2.png`, `보고서 뒷배경3.png` 파일을 
-   `C:\Test\pdf\` 폴더에 배치 (✅ 이미 추가됨!)
-2. 이미지 크기: A4 용지 크기 (595x842 픽셀 권장)
-3. 자동으로 배경에 적용됩니다
 
-## 🔧 주요 클래스 및 메서드
-
-### `ReportData`
-보고서에 들어갈 데이터를 담는 클래스
-
-**주요 필드:**
-- `company_name`: 회사명
-- `pc_name`: PC 이름
-- `date`: 분석 날짜
-- `pc_info`: PC 정보 딕셔너리
-- `analysis_purpose`: 분석 목적
-- `analysis_schedule`: 분석 일정
-
-### `SecurityReportPDF`
-PDF를 생성하는 메인 클래스
-
-**주요 메서드:**
-- `create_page_1_cover()`: 표지 생성
-- `create_page_2_toc()`: 목차 생성
-- `create_page_3_overview()`: 개요 생성
-- `generate_report()`: 전체 보고서 생성
-
-## 📝 다음 개발 단계
-
-### 4-8페이지 추가
-```python
-def create_page_4_overview_2(self, c, data):
-    """4페이지: 개요 계속"""
-    pass
-
-def create_page_5_analysis_summary(self, c, data):
-    """5페이지: 분석 요약"""
-    pass
-
-def create_page_6_analysis_detail_1(self, c, data):
-    """6페이지: 분석 상세 1"""
-    pass
-
-def create_page_7_analysis_detail_2(self, c, data):
-    """7페이지: 분석 상세 2"""
-    pass
-
-def create_page_8_conclusion(self, c, data):
-    """8페이지: 결론"""
-    pass
-```
-
-### Gemini API 연동
-```python
-# Analyzer.py의 _generate_analysis_result()에서 
-# Gemini로 분석 후 ReportData 객체 생성
-gemini_result = analyze_with_gemini(artifacts)
-report_data = ReportData.from_gemini(gemini_result)
-generator.generate_report("output.pdf", report_data)
-```
-
-## ⚠️ 주의사항
-
-1. **폰트**: 한글이 깨지면 폰트 경로를 확인하세요
-2. **이미지**: 배경 이미지가 없어도 기본 패턴으로 생성됩니다
-3. **메모리**: 대량 생성 시 메모리 사용에 주의하세요
-
-## 🐛 문제 해결
-
-### 한글이 깨져요
-```python
-# 맑은고딕 경로 확인
-import os
-print(os.path.exists('C:\\Windows\\Fonts\\malgun.ttf'))
-
-# 또는 다른 폰트 사용
-generator = SecurityReportPDF(font_path='your_font_path.ttf')
-```
-
-### 이미지가 안 보여요
-```python
-# 현재 디렉토리 확인
-import os
-print(os.getcwd())
-
-# 이미지 파일 존재 확인
-print(os.path.exists('background_1.png'))
-```
 
