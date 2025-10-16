@@ -42,10 +42,10 @@ class SecurityReportPDF:
         self.width, self.height = A4
         self.font = self._setup_fonts()
         self.canvas = None
-        
+
         self.left = 25
-        self.top = 780
-        self.min_y = 60  # 하단 여백 축소
+        self.top = 760
+        self.min_y = 40
         self.current_y = self.top
         self.current_page = 1
 
@@ -60,9 +60,10 @@ class SecurityReportPDF:
         self.L2 = self.left + 10
         self.L3 = self.left + 20
         self.L4 = self.left + 35
+        self.L5 = self.left + 50  # ✅ 서브 헤딩 아래 불릿용
 
         # 목차 저장 (대분류/소분류 구분)
-        self.toc_entries = []  # [(title, page_num, dest_name, is_main), ...]
+        self.toc_entries = []
 
         d = os.path.dirname(os.path.abspath(__file__))
         self.bg1 = os.path.join(d, "001.png")
@@ -115,6 +116,95 @@ class SecurityReportPDF:
         if line:
             lines.append(line)
         return lines
+    
+    def _wrap_text_with_formatting(self, text: str, max_width: int, font_size: int):
+        """
+        볼드 마커를 고려한 텍스트 래핑
+        반환: [(line_text, segments), ...]
+        segments: [{'text': str, 'bold': bool}, ...]
+        """
+        if not text or not text.strip():
+            return []
+        
+        safe_max = max(max_width, 80)
+        
+        # 1. 볼드 세그먼트 파싱
+        segments = self._parse_inline_markdown(text)
+        
+        # 2. 각 세그먼트를 래핑
+        result_lines = []
+        current_line_segments = []
+        current_line_width = 0
+        
+        for segment in segments:
+            seg_text = segment['text']
+            is_bold = segment['bold']
+            font_name = 'MalgunBold' if is_bold else self.font
+            
+            # 폰트가 등록되지 않았을 경우 대비
+            try:
+                self.canvas.setFont(font_name, font_size)
+            except:
+                font_name = self.font
+                self.canvas.setFont(font_name, font_size)
+            
+            words = seg_text.split()
+            
+            for word in words:
+                word_width = self.canvas.stringWidth(word + ' ', font_name, font_size)
+                
+                # 현재 줄에 추가 가능한지 확인
+                if current_line_width + word_width <= (safe_max - 10):
+                    current_line_segments.append({
+                        'text': word + ' ',
+                        'bold': is_bold
+                    })
+                    current_line_width += word_width
+                else:
+                    # 현재 줄 완성
+                    if current_line_segments:
+                        result_lines.append(current_line_segments)
+                        current_line_segments = []
+                        current_line_width = 0
+                    
+                    # 단어가 너무 길면 강제 분할
+                    if word_width > (safe_max - 10):
+                        chars = list(word)
+                        temp = ""
+                        for ch in chars:
+                            test_ch = temp + ch
+                            ch_width = self.canvas.stringWidth(test_ch, font_name, font_size)
+                            if ch_width <= (safe_max - 10):
+                                temp += ch
+                            else:
+                                if temp:
+                                    current_line_segments.append({
+                                        'text': temp,
+                                        'bold': is_bold
+                                    })
+                                    result_lines.append(current_line_segments)
+                                    current_line_segments = []
+                                    current_line_width = 0
+                                temp = ch
+                        if temp:
+                            current_line_segments.append({
+                                'text': temp + ' ',
+                                'bold': is_bold
+                            })
+                            current_line_width = self.canvas.stringWidth(temp + ' ', font_name, font_size)
+                    else:
+                        # 새 줄 시작
+                        current_line_segments.append({
+                            'text': word + ' ',
+                            'bold': is_bold
+                        })
+                        current_line_width = word_width
+        
+        # 마지막 줄 추가
+        if current_line_segments:
+            result_lines.append(current_line_segments)
+        
+        return result_lines
 
     def _bg(self, c, p):
         bg = [self.bg1, self.bg2, self.bg2][min(p - 1, 2)]
@@ -181,8 +271,8 @@ class SecurityReportPDF:
             font_name = 'MalgunBold' if segment['bold'] else self.font
             current_x += self.canvas.stringWidth(segment['text'], font_name, font_size)
 
-    def draw_paragraph(self, x, text, font_size=13, line_spacing=17, max_width=None):
-        """문단 그리기"""
+    def draw_paragraph(self, x, text, font_size=13, line_spacing=22, max_width=None):
+        """문단 그리기 (볼드 마커 고려한 래핑)"""
         if max_width is None:
             max_width = self.width - x - 30
         
@@ -208,13 +298,39 @@ class SecurityReportPDF:
                 self.canvas.drawString(x, self.current_y, line)
                 self.current_y -= line_spacing
         else:
-            # 일반 처리 (인라인 볼드 포함)
+            # 인라인 볼드 처리 (개선된 래핑)
             safe_max_width = max(max_width, 100)
-            lines = self._wrap_text(text, safe_max_width, font_size)
+            wrapped_lines = self._wrap_text_with_formatting(text, safe_max_width, font_size)
             
-            for line in lines:
+            for line_segments in wrapped_lines:
                 self.check_space(line_spacing + 10)
-                self.draw_text_with_formatting(x, self.current_y, line, font_size)
+                
+                # 각 세그먼트 렌더링
+                current_x = x
+                for segment in line_segments:
+                    seg_text = segment['text'].rstrip()
+                    if not seg_text:
+                        continue
+                    
+                    if segment['bold']:
+                        try:
+                            self.canvas.setFont('MalgunBold', font_size)
+                        except:
+                            self.canvas.setFont(self.font, font_size)
+                    else:
+                        self.canvas.setFont(self.font, font_size)
+                    
+                    self.canvas.drawString(current_x, self.current_y, seg_text)
+                    
+                    # 폰트 확인
+                    font_name = 'MalgunBold' if segment['bold'] else self.font
+                    try:
+                        width = self.canvas.stringWidth(seg_text + ' ', font_name, font_size)
+                    except:
+                        width = self.canvas.stringWidth(seg_text + ' ', self.font, font_size)
+                    
+                    current_x += width
+                
                 self.current_y -= line_spacing
 
     def draw_table(self, headers, rows, col_widths, x, row_height=45):
@@ -232,7 +348,7 @@ class SecurityReportPDF:
             total_height += max(row_height, max_lines * 20 + 15)  # 줄당 20px + 여백 증가
         
         # ✅ 표 위쪽 여백 확보 (check_space로 충분)
-        self.check_space(total_height + 30)
+        self.check_space(total_height + 40)
         
         # 헤더
         self.canvas.setFont(self.font, 12)  # 헤더 글자 크기 증가 11 → 12
@@ -436,8 +552,8 @@ class SecurityReportPDF:
                                 col_widths[i] = 70
                     
                     self.draw_table(headers, rows, col_widths, x_start)
-                    # ✅ 표 아래쪽 간격 추가 (25px) - 위쪽과 동일하게
-                    self.current_y -= 25
+                    # ✅ 표 아래쪽 간격 추가 (40px) - 위쪽과 동일하게
+                    self.current_y -= 40    
                 
                 last_end = match.end()
             
@@ -451,33 +567,116 @@ class SecurityReportPDF:
     
     def _render_text_lines(self, content, x_start):
         """
+
         일반 텍스트 라인 처리 (번호 리스트, 불릿 리스트 포함)
-        ✅ 들여쓰기 일관성 개선
+
+        ✅ 서브 헤딩 및 계층적 불릿 지원
+
         """
+
         lines = content.split('\n')
+
+        in_sub_context = False  # 서브 헤딩 컨텍스트 플래그
+
+
+
+        # 패턴 정의
+
+        sub_heading_pattern = r'^\* \*\*(.+?)\*\*:$'  # * **텍스트**:
+
+        indented_bullet_pattern = r'^  +\* (.+)$'     # 2칸 이상 들여쓰기 + *
+
+        numbered_pattern = r'^(\d+)\.\s+(.*)$'        # 1. 2. 3.
+
+        bullet_pattern = r'^\* (.+)$'                  # * 텍스트
+
+
+
         for line in lines:
-            line = line.rstrip()
-            if not line.strip():
-                self.current_y -= 8
+
+            line_rstrip = line.rstrip()
+
+
+
+            # 빈 줄 처리
+            if not line_rstrip.strip():
+                self.current_y -= 10
+                in_sub_context = False  # 컨텍스트 리셋
                 continue
+
             
-            # 번호 리스트 처리 (1. 2. 3. ...)
-            numbered_pattern = r'^(\d+)\.\s+(.*)$'
-            numbered_match = re.match(numbered_pattern, line)
+
+            # 1. 서브 헤딩 감지 (* **텍스트**:)
+            sub_heading_match = re.match(sub_heading_pattern, line_rstrip)
+
+            if sub_heading_match:
+
+                heading_text = sub_heading_match.group(1)
+
+                self.check_space(25)
+
+                # 서브 헤딩 렌더링 (볼드, 14pt, L3)
+                try:
+
+                    self.canvas.setFont('MalgunBold', 14)
+
+                except:
+
+                    self.canvas.setFont(self.font, 14)
+
+                self.canvas.setFillColor(self.black)
+
+                self.canvas.drawString(self.L3, self.current_y, f"• {heading_text}:")
+
+
+
+                self.current_y -= 24
+
+                in_sub_context = True  # 서브 컨텍스트 활성화
+
+                continue
+
+            # 2. 들여쓰기된 불릿 감지 (  * 텍스트)
+            indented_bullet_match = re.match(indented_bullet_pattern, line_rstrip)
+
+            if indented_bullet_match:
+
+                bullet_text = indented_bullet_match.group(1)
+
+                # 서브 컨텍스트면 L5, 아니면 L4
+                indent_level = self.L5 if in_sub_context else self.L4
+
+                self.draw_paragraph(indent_level, f"• {bullet_text}", font_size=13, line_spacing=22)
+
+                continue
+
+            # 3. 번호 리스트 (1. 2. 3.)
+            numbered_match = re.match(numbered_pattern, line_rstrip)
+
             if numbered_match:
-                # 번호 리스트는 L3 위치에 렌더링
-                self.draw_paragraph(self.L3, line, font_size=13, line_spacing=17)
+
+                self.draw_paragraph(self.L3, line_rstrip, font_size=13, line_spacing=22)
+
+                in_sub_context = False  # 컨텍스트 리셋
+
                 continue
-            
-            # 불릿 리스트 처리 (•, *, -, 등)
-            if line.startswith(("* ", "- ", "• ")):
-                # ✅ 불릿 리스트는 L4 위치에 렌더링하여 들여쓰기 통일
-                bullet_text = "• " + line[2:].strip()
-                self.draw_paragraph(self.L4, bullet_text, font_size=13, line_spacing=17)
+
+            # 4. 일반 불릿 (* 텍스트)
+            bullet_match = re.match(bullet_pattern, line_rstrip)
+
+            if bullet_match:
+
+                bullet_text = bullet_match.group(1)
+
+                self.draw_paragraph(self.L4, f"• {bullet_text}", font_size=13, line_spacing=22)
+
+                in_sub_context = False  # 컨텍스트 리셋
+
                 continue
-            
-            # 일반 텍스트는 x_start 위치에 렌더링
-            self.draw_paragraph(x_start, line, font_size=13, line_spacing=17)
+
+            # 5. 일반 텍스트
+            self.draw_paragraph(x_start, line_rstrip, font_size=13, line_spacing=22)
+            in_sub_context = False  # 컨텍스트 리셋
 
     # ==============================
     # 페이지 생성
@@ -611,7 +810,7 @@ class SecurityReportPDF:
             
             # Content
             self.render_markdown_content(content, self.L2)
-            self.current_y -= 20
+            self.current_y -= 30
 
     # ==============================
     # 메인
