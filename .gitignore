@@ -27,3 +27,25 @@ __pycache__/security_report_pdf_v2.cpython-314.pyc
 .gitignore
 
 test_security_report.pdf
+
+# 환경 변수 파일 (절대 Git에 올리지 않음!)
+.env
+
+# AWS 자격증명
+.aws/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+
+# 로컬 생성 PDF
+*.pdf
+!001.png
+!002.png
